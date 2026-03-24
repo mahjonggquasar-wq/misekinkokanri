@@ -16,7 +16,25 @@
     <!-- ヘッダー -->
     <header class="app-header">
       <h1 class="app-title"><span>店金庫管理</span></h1>
+      <div class="sync-status" id="sync-status">
+        <span class="sync-dot"></span>
+        <span class="sync-text">未接続</span>
+      </div>
     </header>
+
+    <!-- API URL設定パネル -->
+    <section class="setup-panel" id="setup-panel">
+      <div class="setup-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <span>スプレッドシート連携</span>
+      </div>
+      <p class="setup-desc">GASウェブアプリのURLを入力して接続してください</p>
+      <div class="setup-input-group">
+        <input type="url" class="setup-input" id="gas-url-input" placeholder="https://script.google.com/macros/s/..." aria-label="GAS URL">
+        <button class="btn-connect" id="btn-connect" type="button">接続</button>
+      </div>
+      <button class="btn-setup-toggle" id="btn-setup-close" type="button">閉じる</button>
+    </section>
 
     <!-- 残高カード -->
     <section class="balance-card" aria-label="合計残高">
@@ -174,8 +192,8 @@
 
     </section>
 
-    <!-- リセットボタン -->
-    <div class="reset-section">
+    <!-- ボトムバー -->
+    <div class="bottom-bar">
       <button class="btn-reset" id="btn-reset" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -183,13 +201,28 @@
         </svg>
         リセット
       </button>
+      <button class="btn-settings" id="btn-settings" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+        設定
+      </button>
     </div>
 
     <!-- フッター -->
     <footer class="app-footer">
-      <p class="footer-text">店金庫管理アプリ v1.0</p>
+      <p class="footer-text">店金庫管理アプリ v1.1</p>
     </footer>
 
+  </div>
+
+  <!-- トースト通知 -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ローディングオーバーレイ -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">通信中...</div>
   </div>
 
   <script src="script.js"></script>
