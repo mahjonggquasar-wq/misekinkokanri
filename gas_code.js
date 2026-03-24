@@ -15,6 +15,9 @@
  *   7. アクセスできるユーザー:「全員」
  *   8. 「デプロイ」をクリック
  *   9. 表示されたURLをコピーしてアプリに設定
+ * 
+ * ※ コードを更新した場合は「デプロイを管理」→「新しいバージョン」で
+ *   再デプロイしてください。
  * ============================================================
  */
 
@@ -33,7 +36,6 @@ function ensureHeaders(sheet) {
   const firstCell = sheet.getRange('A1').getValue();
   if (firstCell !== '日時') {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    // ヘッダーの書式設定
     const headerRange = sheet.getRange(1, 1, 1, headers.length);
     headerRange.setFontWeight('bold');
     headerRange.setBackground('#1a1a2e');
@@ -43,7 +45,7 @@ function ensureHeaders(sheet) {
 }
 
 /**
- * GET: 最新の在庫状況を返す
+ * GET: 最新の在庫状況を返す（JSONP対応）
  */
 function doGet(e) {
   try {
@@ -51,7 +53,7 @@ function doGet(e) {
     const sheet = ss.getSheetByName(SHEET_NAME);
     
     if (!sheet) {
-      return createJsonResponse({ success: false, error: 'シートが見つかりません' });
+      return createResponse(e, { success: false, error: 'シートが見つかりません' });
     }
     
     ensureHeaders(sheet);
@@ -60,7 +62,7 @@ function doGet(e) {
     
     // データが無い場合（ヘッダーのみ）
     if (lastRow <= 1) {
-      return createJsonResponse({
+      return createResponse(e, {
         success: true,
         vault: { '50': 0, '100': 0, '500': 0, '1000': 0, '5000': 0 },
         totalBalance: 0,
@@ -71,7 +73,7 @@ function doGet(e) {
     // 最終行から在庫情報を取得
     const lastRowData = sheet.getRange(lastRow, 1, 1, 11).getValues()[0];
     
-    return createJsonResponse({
+    return createResponse(e, {
       success: true,
       vault: {
         '50': lastRowData[5] || 0,
@@ -85,7 +87,7 @@ function doGet(e) {
     });
     
   } catch (error) {
-    return createJsonResponse({ success: false, error: error.toString() });
+    return createResponse(e, { success: false, error: error.toString() });
   }
 }
 
@@ -100,33 +102,31 @@ function doPost(e) {
     const sheet = ss.getSheetByName(SHEET_NAME);
     
     if (!sheet) {
-      return createJsonResponse({ success: false, error: 'シートが見つかりません' });
+      return createResponse(e, { success: false, error: 'シートが見つかりません' });
     }
     
     ensureHeaders(sheet);
     
-    // データの検証
-    const type = data.type;       // '入金' or '出金'
-    const denom = data.denom;     // '50', '100', '500', '1000', '5000'
-    const count = data.count;     // 枚数
-    const vault = data.vault;     // 現在の在庫状態 { '50': n, '100': n, ... }
+    const type = data.type;
+    const denom = data.denom;
+    const count = data.count;
+    const vault = data.vault;
     const totalBalance = data.totalBalance;
     
     if (!type || !denom || !count || !vault) {
-      return createJsonResponse({ success: false, error: 'パラメータ不足' });
+      return createResponse(e, { success: false, error: 'パラメータ不足' });
     }
     
     const denomValue = parseInt(denom);
     const amount = denomValue * count;
     const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
     
-    // 新しい行を追加
     const newRow = [
       now,
       type,
       denom + '円',
       count,
-      (type === '入金' ? '+' : '-') + amount.toLocaleString(),
+      (type === '入金' ? '+' : '-') + amount,
       vault['50'] || 0,
       vault['100'] || 0,
       vault['500'] || 0,
@@ -137,7 +137,7 @@ function doPost(e) {
     
     sheet.appendRow(newRow);
     
-    // 金額列の書式設定（入金は緑、出金は赤）
+    // 書式設定（入金は緑、出金は赤）
     const lastRow = sheet.getLastRow();
     const typeCell = sheet.getRange(lastRow, 2);
     const amountCell = sheet.getRange(lastRow, 5);
@@ -150,21 +150,31 @@ function doPost(e) {
       amountCell.setFontColor('#ff4466');
     }
     
-    return createJsonResponse({
+    return createResponse(e, {
       success: true,
-      message: `${type}を記録しました: ${denom}円 × ${count}枚`,
+      message: type + 'を記録しました: ' + denom + '円 × ' + count + '枚',
       row: lastRow
     });
     
   } catch (error) {
-    return createJsonResponse({ success: false, error: error.toString() });
+    return createResponse(e, { success: false, error: error.toString() });
   }
 }
 
 /**
- * JSON レスポンスを作成（CORS対応）
+ * レスポンス作成（JSONP / JSON自動判定）
  */
-function createJsonResponse(data) {
+function createResponse(e, data) {
+  const callback = e && e.parameter && e.parameter.callback;
+  
+  if (callback) {
+    // JSONP形式で返す（GETリクエスト用、CORS回避）
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(data) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  
+  // 通常のJSON
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
