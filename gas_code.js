@@ -11,32 +11,30 @@
  *   3. このコード全体をコピーして貼り付け
  *   4. 保存（Ctrl+S）
  *   5. 「デプロイ」→「新しいデプロイ」
+ *      （既存デプロイがある場合は「デプロイを管理」→ 鉛筆アイコン → 新バージョン）
  *   6. 種類:「ウェブアプリ」を選択
  *   7. アクセスできるユーザー:「全員」
  *   8. 「デプロイ」をクリック
  *   9. 表示されたURLをコピーしてアプリに設定
- * 
- * ※ コードを更新した場合は「デプロイを管理」→「新しいバージョン」で
- *   再デプロイしてください。
  * ============================================================
  */
 
-const SHEET_NAME = '金庫管理';
+var SHEET_NAME = '金庫管理';
 
 /**
  * ヘッダー行を初期化（存在しなければ作成）
  */
 function ensureHeaders(sheet) {
-  const headers = [
+  var headers = [
     '日時', '区分', '金種', '枚数', '金額',
     '50円在庫', '100円在庫', '500円在庫', '1000円在庫', '5000円在庫',
     '合計残高'
   ];
   
-  const firstCell = sheet.getRange('A1').getValue();
+  var firstCell = sheet.getRange('A1').getValue();
   if (firstCell !== '日時') {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    var headerRange = sheet.getRange(1, 1, 1, headers.length);
     headerRange.setFontWeight('bold');
     headerRange.setBackground('#1a1a2e');
     headerRange.setFontColor('#f0d78c');
@@ -45,49 +43,49 @@ function ensureHeaders(sheet) {
 }
 
 /**
- * GET: 最新の在庫状況を返す（JSONP対応）
+ * GET: 最新の在庫をHTMLで返す（iframe + postMessage 方式）
  */
 function doGet(e) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_NAME);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_NAME);
     
     if (!sheet) {
-      return createResponse(e, { success: false, error: 'シートが見つかりません' });
+      return sendPostMessage({ success: false, error: 'シートが見つかりません' });
     }
     
     ensureHeaders(sheet);
     
-    const lastRow = sheet.getLastRow();
+    var lastRow = sheet.getLastRow();
+    var data;
     
-    // データが無い場合（ヘッダーのみ）
     if (lastRow <= 1) {
-      return createResponse(e, {
+      data = {
         success: true,
         vault: { '50': 0, '100': 0, '500': 0, '1000': 0, '5000': 0 },
         totalBalance: 0,
         lastUpdated: null
-      });
+      };
+    } else {
+      var lastRowData = sheet.getRange(lastRow, 1, 1, 11).getValues()[0];
+      data = {
+        success: true,
+        vault: {
+          '50': lastRowData[5] || 0,
+          '100': lastRowData[6] || 0,
+          '500': lastRowData[7] || 0,
+          '1000': lastRowData[8] || 0,
+          '5000': lastRowData[9] || 0
+        },
+        totalBalance: lastRowData[10] || 0,
+        lastUpdated: lastRowData[0] ? lastRowData[0].toString() : null
+      };
     }
     
-    // 最終行から在庫情報を取得
-    const lastRowData = sheet.getRange(lastRow, 1, 1, 11).getValues()[0];
-    
-    return createResponse(e, {
-      success: true,
-      vault: {
-        '50': lastRowData[5] || 0,
-        '100': lastRowData[6] || 0,
-        '500': lastRowData[7] || 0,
-        '1000': lastRowData[8] || 0,
-        '5000': lastRowData[9] || 0,
-      },
-      totalBalance: lastRowData[10] || 0,
-      lastUpdated: lastRowData[0] ? lastRowData[0].toString() : null
-    });
+    return sendPostMessage(data);
     
   } catch (error) {
-    return createResponse(e, { success: false, error: error.toString() });
+    return sendPostMessage({ success: false, error: error.toString() });
   }
 }
 
@@ -96,32 +94,39 @@ function doGet(e) {
  */
 function doPost(e) {
   try {
-    const data = JSON.parse(e.postData.contents);
+    var rawData = '';
+    if (e.parameter && e.parameter.data) {
+      rawData = e.parameter.data;
+    } else if (e.postData && e.postData.contents) {
+      rawData = e.postData.contents;
+    }
     
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_NAME);
+    var data = JSON.parse(rawData);
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_NAME);
     
     if (!sheet) {
-      return createResponse(e, { success: false, error: 'シートが見つかりません' });
+      return sendPostMessage({ success: false, error: 'シートが見つかりません' });
     }
     
     ensureHeaders(sheet);
     
-    const type = data.type;
-    const denom = data.denom;
-    const count = data.count;
-    const vault = data.vault;
-    const totalBalance = data.totalBalance;
+    var type = data.type;
+    var denom = data.denom;
+    var count = data.count;
+    var vault = data.vault;
+    var totalBalance = data.totalBalance;
     
     if (!type || !denom || !count || !vault) {
-      return createResponse(e, { success: false, error: 'パラメータ不足' });
+      return sendPostMessage({ success: false, error: 'パラメータ不足' });
     }
     
-    const denomValue = parseInt(denom);
-    const amount = denomValue * count;
-    const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+    var denomValue = parseInt(denom);
+    var amount = denomValue * count;
+    var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
     
-    const newRow = [
+    var newRow = [
       now,
       type,
       denom + '円',
@@ -137,10 +142,9 @@ function doPost(e) {
     
     sheet.appendRow(newRow);
     
-    // 書式設定（入金は緑、出金は赤）
-    const lastRow = sheet.getLastRow();
-    const typeCell = sheet.getRange(lastRow, 2);
-    const amountCell = sheet.getRange(lastRow, 5);
+    var lastRow = sheet.getLastRow();
+    var typeCell = sheet.getRange(lastRow, 2);
+    var amountCell = sheet.getRange(lastRow, 5);
     
     if (type === '入金') {
       typeCell.setFontColor('#00e676');
@@ -150,32 +154,25 @@ function doPost(e) {
       amountCell.setFontColor('#ff4466');
     }
     
-    return createResponse(e, {
+    return sendPostMessage({
       success: true,
-      message: type + 'を記録しました: ' + denom + '円 × ' + count + '枚',
-      row: lastRow
+      message: type + 'を記録: ' + denom + '円 × ' + count + '枚'
     });
     
   } catch (error) {
-    return createResponse(e, { success: false, error: error.toString() });
+    return sendPostMessage({ success: false, error: error.toString() });
   }
 }
 
 /**
- * レスポンス作成（JSONP / JSON自動判定）
+ * HTML でデータを返し、parent.postMessage で通知する（CORS完全回避）
  */
-function createResponse(e, data) {
-  const callback = e && e.parameter && e.parameter.callback;
+function sendPostMessage(data) {
+  var json = JSON.stringify(data);
+  var html = '<!DOCTYPE html><html><head><script>'
+    + 'parent.postMessage(' + json + ', "*");'
+    + '</script></head><body></body></html>';
   
-  if (callback) {
-    // JSONP形式で返す（GETリクエスト用、CORS回避）
-    return ContentService
-      .createTextOutput(callback + '(' + JSON.stringify(data) + ')')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-  
-  // 通常のJSON
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }

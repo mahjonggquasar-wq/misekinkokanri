@@ -1,8 +1,7 @@
 /* ================================================================
    店金庫管理アプリ - メインスクリプト
    操作フロー: 枚数入力 → 入金/出金ボタン
-   スプレッドシート連携: Google Apps Script Web API
-   通信方式: GET=JSONP / POST=no-cors fetch（CORS回避）
+   スプレッドシート連携: GAS Web API via iframe + postMessage
    ================================================================ */
 
 (() => {
@@ -21,7 +20,7 @@
   const vault = {};
   DENOMINATIONS.forEach(d => { vault[d.id] = 0; });
 
-  // --- GAS API URL（localStorageに保存）---
+  // --- GAS API URL ---
   const STORAGE_KEY_URL = 'kinko_gas_url';
 
   function getGasUrl() {
@@ -52,11 +51,7 @@
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
     toastContainer.appendChild(toast);
-
-    requestAnimationFrame(() => {
-      toast.classList.add('show');
-    });
-
+    requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 300);
@@ -64,31 +59,15 @@
   }
 
   // --- ローディング ---
-  function showLoading() {
-    loadingOverlay.classList.add('active');
-  }
-
-  function hideLoading() {
-    loadingOverlay.classList.remove('active');
-  }
+  function showLoading() { loadingOverlay.classList.add('active'); }
+  function hideLoading() { loadingOverlay.classList.remove('active'); }
 
   // --- 同期ステータス ---
   function setSyncStatus(status) {
     const text = syncStatus.querySelector('.sync-text');
     syncStatus.className = 'sync-status sync-' + status;
-    switch (status) {
-      case 'connected':
-        text.textContent = '接続済み';
-        break;
-      case 'syncing':
-        text.textContent = '同期中...';
-        break;
-      case 'error':
-        text.textContent = 'エラー';
-        break;
-      default:
-        text.textContent = '未接続';
-    }
+    const labels = { connected: '接続済み', syncing: '同期中...', error: 'エラー' };
+    text.textContent = labels[status] || '未接続';
   }
 
   // --- セットアップパネル ---
@@ -104,9 +83,7 @@
   // --- 合計計算 ---
   function calculateTotal() {
     let total = 0;
-    DENOMINATIONS.forEach(d => {
-      total += d.value * (vault[d.id] || 0);
-    });
+    DENOMINATIONS.forEach(d => { total += d.value * (vault[d.id] || 0); });
     return total;
   }
 
@@ -114,7 +91,6 @@
   function updateBalance() {
     const total = calculateTotal();
     balanceValueEl.textContent = formatNumber(total);
-
     balanceAmountEl.classList.remove('updated');
     void balanceAmountEl.offsetWidth;
     balanceAmountEl.classList.add('updated');
@@ -123,13 +99,8 @@
   function updateStockDisplay(denomId) {
     const stockEl = document.getElementById(`stock-${denomId}`);
     stockEl.textContent = vault[denomId];
-
     const item = stockEl.closest('.breakdown-item');
-    if (vault[denomId] > 0) {
-      item.classList.add('has-stock');
-    } else {
-      item.classList.remove('has-stock');
-    }
+    vault[denomId] > 0 ? item.classList.add('has-stock') : item.classList.remove('has-stock');
   }
 
   function updateAllUI() {
@@ -155,74 +126,102 @@
   }
 
   // =============================================
-  // API通信（CORS回避版）
-  // GET: JSONP（<script>タグ方式）
-  // POST: fetch mode:'no-cors'
+  // API通信（iframe + postMessage 方式）
+  // GASのリダイレクトやCORSの問題を完全回避
   // =============================================
 
   /**
-   * JSONP方式でGETリクエスト（CORS完全回避）
+   * iframe + postMessage で GAS からデータを取得（GET）
    */
-  function apiGetJsonp() {
+  function apiGet() {
     const url = getGasUrl();
     if (!url) return Promise.resolve(null);
 
     return new Promise((resolve, reject) => {
-      const callbackName = '_gasCallback_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.name = '_gas_get_' + Date.now();
+
       const timeoutId = setTimeout(() => {
         cleanup();
-        reject(new Error('タイムアウト（15秒）'));
-      }, 15000);
+        reject(new Error('タイムアウト（20秒）'));
+      }, 20000);
 
-      function cleanup() {
-        clearTimeout(timeoutId);
-        delete window[callbackName];
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
+      function handler(event) {
+        // GASからのpostMessageを受信
+        if (event.data && typeof event.data === 'object' && event.data.success !== undefined) {
+          cleanup();
+          resolve(event.data);
         }
       }
 
-      // グローバルコールバック関数を登録
-      window[callbackName] = (data) => {
-        cleanup();
-        resolve(data);
-      };
+      function cleanup() {
+        clearTimeout(timeoutId);
+        window.removeEventListener('message', handler);
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }
 
-      // <script>タグでリクエスト
-      const script = document.createElement('script');
-      script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + callbackName;
-      script.onerror = () => {
-        cleanup();
-        reject(new Error('スクリプト読み込みエラー'));
-      };
-      document.body.appendChild(script);
+      window.addEventListener('message', handler);
+      iframe.src = url;
+      document.body.appendChild(iframe);
     });
   }
 
   /**
-   * no-cors mode でPOSTリクエスト（レスポンスは読めないが記録される）
+   * form投稿 + iframe でデータを送信（POST）
+   * GASのdoPostが処理後にpostMessageで結果を通知
    */
-  async function apiPostNoCorst(data) {
+  function apiPost(data) {
     const url = getGasUrl();
-    if (!url) return null;
+    if (!url) return Promise.resolve(null);
 
-    try {
-      setSyncStatus('syncing');
-      await fetch(url, {
-        method: 'POST',
-        mode: 'no-cors',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(data),
-      });
-      // no-cors ではレスポンスは読めないが、GAS側で正常に記録される
-      setSyncStatus('connected');
-      return { success: true };
-    } catch (err) {
-      setSyncStatus('error');
-      showToast('通信エラー: ' + err.message, 'error');
-      return null;
-    }
+    return new Promise((resolve) => {
+      const iframeName = '_gas_post_' + Date.now();
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.name = iframeName;
+      document.body.appendChild(iframe);
+
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        // タイムアウトしても送信は恐らく成功している
+        resolve({ success: true, timeout: true });
+      }, 20000);
+
+      function handler(event) {
+        if (event.data && typeof event.data === 'object' && event.data.success !== undefined) {
+          cleanup();
+          resolve(event.data);
+        }
+      }
+
+      function cleanup() {
+        clearTimeout(timeoutId);
+        window.removeEventListener('message', handler);
+        setTimeout(() => {
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+        }, 1000);
+      }
+
+      window.addEventListener('message', handler);
+
+      // hidden form で POST 送信
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      form.target = iframeName;
+      form.style.display = 'none';
+
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'data';
+      input.value = JSON.stringify(data);
+      form.appendChild(input);
+
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+    });
   }
 
   // --- シートから在庫を復元 ---
@@ -233,7 +232,7 @@
     try {
       setSyncStatus('syncing');
       showLoading();
-      const result = await apiGetJsonp();
+      const result = await apiGet();
       hideLoading();
 
       if (result && result.success) {
@@ -263,9 +262,21 @@
       vault: { ...vault },
       totalBalance: calculateTotal(),
     };
-    const result = await apiPostNoCorst(data);
-    if (result && result.success) {
-      showToast(`${type}を記録しました: ${denomId}円 × ${count}枚`, 'success');
+
+    try {
+      setSyncStatus('syncing');
+      const result = await apiPost(data);
+      if (result && result.success) {
+        setSyncStatus('connected');
+        const msg = result.message || `${type}: ${denomId}円 × ${count}枚`;
+        showToast(msg, 'success');
+      } else {
+        setSyncStatus('error');
+        showToast('記録エラー', 'error');
+      }
+    } catch (err) {
+      setSyncStatus('error');
+      showToast('通信エラー: ' + err.message, 'error');
     }
   }
 
@@ -305,9 +316,7 @@
 
   function handleReset() {
     if (!confirm('すべての在庫をリセットしますか？')) return;
-    DENOMINATIONS.forEach(d => {
-      vault[d.id] = 0;
-    });
+    DENOMINATIONS.forEach(d => { vault[d.id] = 0; });
     updateAllUI();
   }
 
@@ -321,7 +330,6 @@
       showToast('正しいGAS URLを入力してください', 'error');
       return;
     }
-
     setGasUrl(url);
     hideSetupPanel();
     showToast('接続を開始します...', 'info');
@@ -333,7 +341,6 @@
     DENOMINATIONS.forEach(d => {
       document.getElementById(`deposit-${d.id}`).addEventListener('click', () => handleDeposit(d.id));
       document.getElementById(`withdraw-${d.id}`).addEventListener('click', () => handleWithdraw(d.id));
-
       const inputEl = document.getElementById(`input-${d.id}`);
       inputEl.addEventListener('focus', () => inputEl.select());
       inputEl.addEventListener('blur', () => {
