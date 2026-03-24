@@ -770,6 +770,39 @@ body::before {
   height: 16px;
 }
 
+.btn-register-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-gold);
+  background: linear-gradient(135deg, rgba(212, 168, 83, 0.1), rgba(212, 168, 83, 0.05));
+  color: var(--gold-light);
+  font-family: 'Inter', 'Noto Sans JP', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  letter-spacing: 0.05em;
+}
+
+.btn-register-check:hover {
+  background: linear-gradient(135deg, rgba(212, 168, 83, 0.2), rgba(212, 168, 83, 0.1));
+  border-color: var(--gold-primary);
+  box-shadow: 0 0 20px var(--gold-glow);
+  transform: translateY(-1px);
+}
+
+.btn-register-check:active {
+  transform: scale(0.97) translateY(0);
+}
+
+.btn-register-check svg {
+  width: 16px;
+  height: 16px;
+}
+
 .btn-settings {
   display: inline-flex;
   align-items: center;
