@@ -258,66 +258,6 @@
     showToast('スプレッドシート連携を設定しました', 'success');
   }
 
-  // --- レジ金確認（規定数との差分を自動精算）---
-  const STANDARD_COUNTS = {
-    '5000': 0,
-    '1000': 20,
-    '500': 13,
-    '100': 30,
-    '50': 10,
-  };
-
-  async function handleRegisterCheck() {
-    // 確認モーダルで精算内容をプレビュー
-    let preview = '';
-    let hasChange = false;
-    DENOMINATIONS.forEach(d => {
-      const current = vault[d.id];
-      const standard = STANDARD_COUNTS[d.id];
-      const diff = current - standard;
-      if (diff > 0) {
-        preview += `${d.label}: ${diff}枚 → 出金\n`;
-        hasChange = true;
-      } else if (diff < 0) {
-        preview += `${d.label}: ${Math.abs(diff)}枚 → 入金\n`;
-        hasChange = true;
-      }
-    });
-
-    if (!hasChange) {
-      showToast('すべての金種が規定数と一致しています', 'success');
-      return;
-    }
-
-    const ok = await showConfirm('レジ金精算を実行しますか？\n規定数と異なる金種を自動調整します');
-    if (!ok) return;
-
-    // 差分を処理
-    DENOMINATIONS.forEach(d => {
-      const current = vault[d.id];
-      const standard = STANDARD_COUNTS[d.id];
-      const diff = current - standard;
-
-      if (diff > 0) {
-        // 在庫が規定数より多い → 出金（金庫から出す）
-        vault[d.id] = standard;
-        sendToSheet('出金（精算）', d.id, diff);
-        flashCard(d.id, 'withdraw');
-        flashBreakdown(d.id);
-      } else if (diff < 0) {
-        // 在庫が規定数より少ない → 入金（金庫に入れる）
-        vault[d.id] = standard;
-        sendToSheet('入金（精算）', d.id, Math.abs(diff));
-        flashCard(d.id, 'deposit');
-        flashBreakdown(d.id);
-      }
-    });
-
-    saveVaultLocal();
-    updateAllUI();
-    showToast('レジ金精算を完了しました', 'success');
-  }
-
   // --- イベント登録 ---
   function bindEvents() {
     DENOMINATIONS.forEach(d => {
@@ -331,7 +271,6 @@
       });
     });
     document.getElementById('btn-reset').addEventListener('click', handleReset);
-    document.getElementById('btn-register-check').addEventListener('click', handleRegisterCheck);
     document.getElementById('btn-settings').addEventListener('click', showSetupPanel);
     document.getElementById('btn-setup-close').addEventListener('click', hideSetupPanel);
     document.getElementById('btn-connect').addEventListener('click', handleConnect);
