@@ -112,8 +112,8 @@ function registerCheck() {
     return;
   }
   
-  // B10~B14 = 枚数（5000円, 1000円, 500円, 100円, 50円）
-  var regValues = regSheet.getRange('B10:B14').getValues();
+  // C10~C14 = 枚数（5000円, 1000円, 500円, 100円, 50円）
+  var regValues = regSheet.getRange('C10:C14').getValues();
   var registerCounts = {
     '5000': Number(regValues[0][0]) || 0,
     '1000': Number(regValues[1][0]) || 0,
