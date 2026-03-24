@@ -8,21 +8,18 @@
  * セットアップ手順:
  *   1. スプレッドシートを開く
  *   2. メニュー「拡張機能」→「Apps Script」
- *   3. このコード全体をコピーして貼り付け
- *   4. 保存（Ctrl+S）
- *   5. 「デプロイ」→「新しいデプロイ」
- *      （既存デプロイがある場合は「デプロイを管理」→ 鉛筆アイコン → 新バージョン）
- *   6. 種類:「ウェブアプリ」を選択
- *   7. アクセスできるユーザー:「全員」
- *   8. 「デプロイ」をクリック
- *   9. 表示されたURLをコピーしてアプリに設定
+ *   3. このコード全体をコピーして貼り付け → 保存
+ *   4. 「デプロイ」→「新しいデプロイ」→ ウェブアプリ
+ *      （更新時は「デプロイを管理」→ 鉛筆 → 新バージョン）
+ *   5. アクセスできるユーザー:「全員」→ デプロイ
+ *   6. 表示されたURLをアプリに設定
  * ============================================================
  */
 
 var SHEET_NAME = '金庫管理';
 
 /**
- * ヘッダー行を初期化（存在しなければ作成）
+ * ヘッダー行を初期化
  */
 function ensureHeaders(sheet) {
   var headers = [
@@ -43,7 +40,7 @@ function ensureHeaders(sheet) {
 }
 
 /**
- * GET: 最新の在庫をHTMLで返す（iframe + postMessage 方式）
+ * GET: 最新の在庫状況を返す
  */
 function doGet(e) {
   try {
@@ -51,41 +48,38 @@ function doGet(e) {
     var sheet = ss.getSheetByName(SHEET_NAME);
     
     if (!sheet) {
-      return sendPostMessage({ success: false, error: 'シートが見つかりません' });
+      return jsonResponse({ success: false, error: 'シートが見つかりません' });
     }
     
     ensureHeaders(sheet);
-    
     var lastRow = sheet.getLastRow();
-    var data;
     
     if (lastRow <= 1) {
-      data = {
+      return jsonResponse({
         success: true,
         vault: { '50': 0, '100': 0, '500': 0, '1000': 0, '5000': 0 },
         totalBalance: 0,
         lastUpdated: null
-      };
-    } else {
-      var lastRowData = sheet.getRange(lastRow, 1, 1, 11).getValues()[0];
-      data = {
-        success: true,
-        vault: {
-          '50': lastRowData[5] || 0,
-          '100': lastRowData[6] || 0,
-          '500': lastRowData[7] || 0,
-          '1000': lastRowData[8] || 0,
-          '5000': lastRowData[9] || 0
-        },
-        totalBalance: lastRowData[10] || 0,
-        lastUpdated: lastRowData[0] ? lastRowData[0].toString() : null
-      };
+      });
     }
     
-    return sendPostMessage(data);
+    var lastRowData = sheet.getRange(lastRow, 1, 1, 11).getValues()[0];
+    
+    return jsonResponse({
+      success: true,
+      vault: {
+        '50': lastRowData[5] || 0,
+        '100': lastRowData[6] || 0,
+        '500': lastRowData[7] || 0,
+        '1000': lastRowData[8] || 0,
+        '5000': lastRowData[9] || 0
+      },
+      totalBalance: lastRowData[10] || 0,
+      lastUpdated: lastRowData[0] ? lastRowData[0].toString() : null
+    });
     
   } catch (error) {
-    return sendPostMessage({ success: false, error: error.toString() });
+    return jsonResponse({ success: false, error: error.toString() });
   }
 }
 
@@ -94,20 +88,14 @@ function doGet(e) {
  */
 function doPost(e) {
   try {
-    var rawData = '';
-    if (e.parameter && e.parameter.data) {
-      rawData = e.parameter.data;
-    } else if (e.postData && e.postData.contents) {
-      rawData = e.postData.contents;
-    }
-    
+    var rawData = e.postData ? e.postData.contents : '';
     var data = JSON.parse(rawData);
     
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(SHEET_NAME);
     
     if (!sheet) {
-      return sendPostMessage({ success: false, error: 'シートが見つかりません' });
+      return jsonResponse({ success: false, error: 'シートが見つかりません' });
     }
     
     ensureHeaders(sheet);
@@ -119,7 +107,7 @@ function doPost(e) {
     var totalBalance = data.totalBalance;
     
     if (!type || !denom || !count || !vault) {
-      return sendPostMessage({ success: false, error: 'パラメータ不足' });
+      return jsonResponse({ success: false, error: 'パラメータ不足' });
     }
     
     var denomValue = parseInt(denom);
@@ -127,16 +115,10 @@ function doPost(e) {
     var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
     
     var newRow = [
-      now,
-      type,
-      denom + '円',
-      count,
+      now, type, denom + '円', count,
       (type === '入金' ? '+' : '-') + amount,
-      vault['50'] || 0,
-      vault['100'] || 0,
-      vault['500'] || 0,
-      vault['1000'] || 0,
-      vault['5000'] || 0,
+      vault['50'] || 0, vault['100'] || 0, vault['500'] || 0,
+      vault['1000'] || 0, vault['5000'] || 0,
       totalBalance
     ];
     
@@ -154,25 +136,21 @@ function doPost(e) {
       amountCell.setFontColor('#ff4466');
     }
     
-    return sendPostMessage({
+    return jsonResponse({
       success: true,
       message: type + 'を記録: ' + denom + '円 × ' + count + '枚'
     });
     
   } catch (error) {
-    return sendPostMessage({ success: false, error: error.toString() });
+    return jsonResponse({ success: false, error: error.toString() });
   }
 }
 
 /**
- * HTML でデータを返し、parent.postMessage で通知する（CORS完全回避）
+ * JSONレスポンスを作成
  */
-function sendPostMessage(data) {
-  var json = JSON.stringify(data);
-  var html = '<!DOCTYPE html><html><head><script>'
-    + 'parent.postMessage(' + json + ', "*");'
-    + '</script></head><body></body></html>';
-  
-  return HtmlService.createHtmlOutput(html)
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+function jsonResponse(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
