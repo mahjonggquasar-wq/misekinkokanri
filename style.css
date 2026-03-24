@@ -770,15 +770,15 @@ body::before {
   height: 16px;
 }
 
-.btn-register-check {
+.btn-sync {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-gold);
-  background: linear-gradient(135deg, rgba(212, 168, 83, 0.1), rgba(212, 168, 83, 0.05));
-  color: var(--gold-light);
+  border: 1px solid rgba(0, 180, 255, 0.2);
+  background: rgba(0, 180, 255, 0.06);
+  color: var(--neon-blue-light);
   font-family: 'Inter', 'Noto Sans JP', sans-serif;
   font-size: 0.82rem;
   font-weight: 600;
@@ -787,20 +787,29 @@ body::before {
   letter-spacing: 0.05em;
 }
 
-.btn-register-check:hover {
-  background: linear-gradient(135deg, rgba(212, 168, 83, 0.2), rgba(212, 168, 83, 0.1));
-  border-color: var(--gold-primary);
-  box-shadow: 0 0 20px var(--gold-glow);
+.btn-sync:hover {
+  background: rgba(0, 180, 255, 0.12);
+  border-color: var(--neon-blue);
+  box-shadow: 0 0 20px var(--neon-blue-glow);
   transform: translateY(-1px);
 }
 
-.btn-register-check:active {
+.btn-sync:active {
   transform: scale(0.97) translateY(0);
 }
 
-.btn-register-check svg {
+.btn-sync svg {
   width: 16px;
   height: 16px;
+}
+
+.btn-sync.syncing svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .btn-settings {

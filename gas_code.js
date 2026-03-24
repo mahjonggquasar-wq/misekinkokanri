@@ -303,14 +303,26 @@ function doPost(e) {
 }
 
 /**
- * GET: テスト用
+ * GET: 最新の在庫状況を返す（JSONP対応 — Webアプリからの同期用）
  */
 function doGet(e) {
-  return jsonResponse({
+  var vault = getCurrentVault();
+  var data = {
     success: true,
-    message: '金庫管理 GAS API は正常に動作しています',
+    vault: vault,
+    totalBalance: calcTotal(vault),
     timestamp: Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss')
-  });
+  };
+  
+  // JSONP対応: callbackパラメータがあればJavaScript形式で返す
+  var callback = e && e.parameter && e.parameter.callback;
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(data) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  
+  return jsonResponse(data);
 }
 
 /**

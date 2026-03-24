@@ -258,6 +258,67 @@
     showToast('スプレッドシート連携を設定しました', 'success');
   }
 
+  // --- スプレッドシートから在庫を同期（JSONP） ---
+  function fetchVaultFromSheet() {
+    return new Promise((resolve, reject) => {
+      const url = getGasUrl();
+      if (!url) { reject(new Error('GAS URLが未設定です')); return; }
+
+      const callbackName = '_gasSync_' + Date.now();
+      const script = document.createElement('script');
+      const timeout = setTimeout(() => {
+        delete window[callbackName];
+        script.remove();
+        reject(new Error('同期タイムアウト'));
+      }, 15000);
+
+      window[callbackName] = (data) => {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+        resolve(data);
+      };
+
+      script.src = url + '?callback=' + callbackName;
+      script.onerror = () => {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+        reject(new Error('同期エラー'));
+      };
+      document.body.appendChild(script);
+    });
+  }
+
+  async function handleSync() {
+    const syncBtn = document.getElementById('btn-sync');
+    syncBtn.classList.add('syncing');
+    setSyncStatus('syncing');
+
+    try {
+      const data = await fetchVaultFromSheet();
+      if (data && data.success && data.vault) {
+        // スプレッドシートの最新在庫でlocalStorageを更新
+        DENOMINATIONS.forEach(d => {
+          vault[d.id] = data.vault[d.id] || 0;
+        });
+        saveVaultLocal();
+        updateAllUI();
+        setSyncStatus('connected');
+        showToast('スプレッドシートと同期しました', 'success');
+      } else {
+        setSyncStatus('error');
+        showToast('同期データが不正です', 'error');
+      }
+    } catch (err) {
+      setSyncStatus('error');
+      showToast(err.message || '同期に失敗しました', 'error');
+      console.error('同期エラー:', err);
+    } finally {
+      syncBtn.classList.remove('syncing');
+    }
+  }
+
   // --- イベント登録 ---
   function bindEvents() {
     DENOMINATIONS.forEach(d => {
@@ -271,6 +332,7 @@
       });
     });
     document.getElementById('btn-reset').addEventListener('click', handleReset);
+    document.getElementById('btn-sync').addEventListener('click', handleSync);
     document.getElementById('btn-settings').addEventListener('click', showSetupPanel);
     document.getElementById('btn-setup-close').addEventListener('click', hideSetupPanel);
     document.getElementById('btn-connect').addEventListener('click', handleConnect);
