@@ -213,11 +213,36 @@
     sendToSheet('出金', denomId, count);
   }
 
-  function handleReset() {
-    if (!confirm('すべての在庫をリセットしますか？')) return;
+  // --- カスタム確認モーダル（confirm代替） ---
+  const confirmModal = document.getElementById('confirm-modal');
+  const confirmOkBtn = document.getElementById('confirm-ok');
+  const confirmCancelBtn = document.getElementById('confirm-cancel');
+
+  function showConfirm(message) {
+    return new Promise((resolve) => {
+      document.getElementById('confirm-modal-text').textContent = message;
+      confirmModal.classList.add('active');
+
+      function onOk() { cleanup(); resolve(true); }
+      function onCancel() { cleanup(); resolve(false); }
+      function cleanup() {
+        confirmOkBtn.removeEventListener('click', onOk);
+        confirmCancelBtn.removeEventListener('click', onCancel);
+        confirmModal.classList.remove('active');
+      }
+
+      confirmOkBtn.addEventListener('click', onOk);
+      confirmCancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
+  async function handleReset() {
+    const ok = await showConfirm('すべての在庫をリセットしますか？');
+    if (!ok) return;
     DENOMINATIONS.forEach(d => { vault[d.id] = 0; });
     saveVaultLocal();
     updateAllUI();
+    showToast('在庫をリセットしました', 'info');
   }
 
   function handleConnect() {
