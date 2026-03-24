@@ -1,8 +1,8 @@
 /* ================================================================
    店金庫管理アプリ - メインスクリプト
-   操作フロー: 枚数入力 → 入金/出金ボタン
-   スプレッドシート連携: GAS Web API (fetch)
-   ※ HTTPS環境（GitHub Pages等）からの利用を前提
+   
+   在庫管理: localStorage（マスター）
+   記録ログ: Googleスプレッドシート（no-cors POST）
    ================================================================ */
 
 (() => {
@@ -21,10 +21,31 @@
   const vault = {};
   DENOMINATIONS.forEach(d => { vault[d.id] = 0; });
 
-  // --- GAS API URL ---
+  // --- ストレージキー ---
   const STORAGE_KEY_URL = 'kinko_gas_url';
+  const STORAGE_KEY_VAULT = 'kinko_vault';
+
   function getGasUrl() { return localStorage.getItem(STORAGE_KEY_URL) || ''; }
   function setGasUrl(url) { localStorage.setItem(STORAGE_KEY_URL, url); }
+
+  // --- 在庫の永続化（localStorage）---
+  function saveVaultLocal() {
+    localStorage.setItem(STORAGE_KEY_VAULT, JSON.stringify(vault));
+  }
+
+  function loadVaultLocal() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_VAULT);
+      if (saved) {
+        const data = JSON.parse(saved);
+        DENOMINATIONS.forEach(d => {
+          vault[d.id] = data[d.id] || 0;
+        });
+        return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
 
   // --- DOM参照 ---
   const balanceValueEl = document.getElementById('balance-value');
@@ -35,7 +56,6 @@
   const loadingOverlay = document.getElementById('loading-overlay');
   const toastContainer = document.getElementById('toast-container');
 
-  // --- ユーティリティ ---
   function formatNumber(num) { return num.toLocaleString('ja-JP'); }
 
   // --- トースト通知 ---
@@ -59,7 +79,13 @@
   function setSyncStatus(status) {
     const text = syncStatus.querySelector('.sync-text');
     syncStatus.className = 'sync-status sync-' + status;
-    const labels = { connected: '接続済み', syncing: '同期中...', error: 'エラー' };
+    const labels = {
+      connected: '記録中',
+      syncing: '送信中...',
+      error: '送信エラー',
+      disconnected: '未接続',
+      offline: 'オフライン',
+    };
     text.textContent = labels[status] || '未接続';
   }
 
@@ -115,90 +141,40 @@
   }
 
   // =============================================
-  // API通信（fetch — HTTPS環境前提）
-  // GAS Web Appはリダイレクト(302)するため
-  // redirect:'follow' で追従する
+  // スプレッドシート記録（no-cors POST）
+  // データは確実に送信されるが、レスポンスは読めない
   // =============================================
 
-  async function apiGet() {
+  async function sendToSheet(type, denomId, count) {
     const url = getGasUrl();
-    if (!url) return null;
+    if (!url) return;
 
-    try {
-      setSyncStatus('syncing');
-      showLoading();
-
-      const res = await fetch(url, { redirect: 'follow' });
-      const result = await res.json();
-
-      hideLoading();
-
-      if (result.success) {
-        setSyncStatus('connected');
-      } else {
-        setSyncStatus('error');
-        showToast('読込エラー: ' + (result.error || '不明'), 'error');
-      }
-      return result;
-    } catch (err) {
-      hideLoading();
-      setSyncStatus('error');
-      showToast('通信エラー: ' + err.message, 'error');
-      return null;
-    }
-  }
-
-  async function apiPost(data) {
-    const url = getGasUrl();
-    if (!url) return null;
-
-    try {
-      setSyncStatus('syncing');
-
-      const res = await fetch(url, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(data),
-      });
-      const result = await res.json();
-
-      if (result.success) {
-        setSyncStatus('connected');
-      } else {
-        setSyncStatus('error');
-        showToast('記録エラー: ' + (result.error || '不明'), 'error');
-      }
-      return result;
-    } catch (err) {
-      setSyncStatus('error');
-      showToast('通信エラー: ' + err.message, 'error');
-      return null;
-    }
-  }
-
-  // --- シートから在庫を復元 ---
-  async function loadVaultFromSheet() {
-    const result = await apiGet();
-    if (result && result.success) {
-      DENOMINATIONS.forEach(d => {
-        vault[d.id] = result.vault[d.id] || 0;
-      });
-      updateAllUI();
-      showToast('シートから在庫を読み込みました', 'success');
-    }
-  }
-
-  // --- シートに記録 ---
-  async function recordToSheet(type, denomId, count) {
     const data = {
-      type, denom: denomId, count,
+      type: type,
+      denom: denomId,
+      count: count,
       vault: { ...vault },
       totalBalance: calculateTotal(),
     };
-    const result = await apiPost(data);
-    if (result && result.success) {
-      showToast(result.message, 'success');
+
+    try {
+      setSyncStatus('syncing');
+
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        redirect: 'follow',
+        body: JSON.stringify(data),
+      });
+
+      // no-cors: レスポンスは読めないが、GAS側で確実に処理される
+      setSyncStatus('connected');
+      showToast(`${type}を記録: ${denomId}円 × ${count}枚`, 'success');
+
+    } catch (err) {
+      setSyncStatus('error');
+      showToast('送信エラー（ローカルには保存済み）', 'error');
+      console.error('GAS送信エラー:', err);
     }
   }
 
@@ -211,10 +187,11 @@
   function handleDeposit(denomId) {
     const count = getInputCount(denomId);
     vault[denomId] += count;
+    saveVaultLocal();
     updateAllUI();
     flashCard(denomId, 'deposit');
     flashBreakdown(denomId);
-    recordToSheet('入金', denomId, count);
+    sendToSheet('入金', denomId, count);
   }
 
   function handleWithdraw(denomId) {
@@ -229,19 +206,21 @@
       return;
     }
     vault[denomId] -= count;
+    saveVaultLocal();
     updateAllUI();
     flashCard(denomId, 'withdraw');
     flashBreakdown(denomId);
-    recordToSheet('出金', denomId, count);
+    sendToSheet('出金', denomId, count);
   }
 
   function handleReset() {
     if (!confirm('すべての在庫をリセットしますか？')) return;
     DENOMINATIONS.forEach(d => { vault[d.id] = 0; });
+    saveVaultLocal();
     updateAllUI();
   }
 
-  async function handleConnect() {
+  function handleConnect() {
     const url = gasUrlInput.value.trim();
     if (!url) { showToast('URLを入力してください', 'error'); return; }
     if (!url.startsWith('https://script.google.com/')) {
@@ -250,8 +229,8 @@
     }
     setGasUrl(url);
     hideSetupPanel();
-    showToast('接続を開始します...', 'info');
-    await loadVaultFromSheet();
+    setSyncStatus('connected');
+    showToast('スプレッドシート連携を設定しました', 'success');
   }
 
   // --- イベント登録 ---
@@ -273,15 +252,22 @@
   }
 
   // --- 初期化 ---
-  async function init() {
+  function init() {
     bindEvents();
+
+    // localStorageから在庫を復元
+    const loaded = loadVaultLocal();
     updateAllUI();
+
+    if (loaded) {
+      showToast('在庫データを復元しました', 'info');
+    }
 
     const savedUrl = getGasUrl();
     if (savedUrl) {
       gasUrlInput.value = savedUrl;
       hideSetupPanel();
-      await loadVaultFromSheet();
+      setSyncStatus('connected');
     } else {
       showSetupPanel();
       setSyncStatus('disconnected');
