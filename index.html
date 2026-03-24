@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="店金庫管理アプリ - 金種別の枚数を入力して入出金を管理">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>店金庫管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ヘッダー -->
+    <header class="app-header">
+      <h1 class="app-title"><span>店金庫管理</span></h1>
+    </header>
+
+    <!-- 残高カード -->
+    <section class="balance-card" aria-label="合計残高">
+      <div class="balance-label">合計残高</div>
+      <div class="balance-amount" id="balance-amount">
+        <span class="value" id="balance-value">0</span><span class="balance-yen">円</span>
+      </div>
+      <!-- 金種別内訳 -->
+      <div class="balance-breakdown" id="balance-breakdown">
+        <div class="breakdown-item" data-denom="5000">
+          <span class="breakdown-icon bill-icon">5K</span>
+          <span class="breakdown-count" id="stock-5000">0</span><span class="breakdown-unit">枚</span>
+        </div>
+        <div class="breakdown-item" data-denom="1000">
+          <span class="breakdown-icon bill-icon blue">1K</span>
+          <span class="breakdown-count" id="stock-1000">0</span><span class="breakdown-unit">枚</span>
+        </div>
+        <div class="breakdown-item" data-denom="500">
+          <span class="breakdown-icon coin-icon silver">500</span>
+          <span class="breakdown-count" id="stock-500">0</span><span class="breakdown-unit">枚</span>
+        </div>
+        <div class="breakdown-item" data-denom="100">
+          <span class="breakdown-icon coin-icon gold">100</span>
+          <span class="breakdown-count" id="stock-100">0</span><span class="breakdown-unit">枚</span>
+        </div>
+        <div class="breakdown-item" data-denom="50">
+          <span class="breakdown-icon coin-icon gray">50</span>
+          <span class="breakdown-count" id="stock-50">0</span><span class="breakdown-unit">枚</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 金種別入力 -->
+    <section class="denomination-section" aria-label="入出金操作">
+
+      <!-- 5,000円 -->
+      <div class="denomination-card denom-5000" data-denom="5000">
+        <div class="denom-label">
+          <div class="denom-icon">5K</div>
+          <span class="denom-name">5,000円</span>
+        </div>
+        <div class="denom-controls">
+          <div class="count-input-wrapper">
+            <input type="number" class="count-input" id="input-5000" value="1" min="1" inputmode="numeric" aria-label="5000円の枚数">
+            <span class="count-unit">枚</span>
+          </div>
+          <div class="action-buttons">
+            <button class="btn-action btn-deposit" id="deposit-5000" aria-label="5000円を入金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>
+              入金
+            </button>
+            <button class="btn-action btn-withdraw" id="withdraw-5000" aria-label="5000円を出金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+              出金
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1,000円 -->
+      <div class="denomination-card denom-1000" data-denom="1000">
+        <div class="denom-label">
+          <div class="denom-icon">1K</div>
+          <span class="denom-name">1,000円</span>
+        </div>
+        <div class="denom-controls">
+          <div class="count-input-wrapper">
+            <input type="number" class="count-input" id="input-1000" value="1" min="1" inputmode="numeric" aria-label="1000円の枚数">
+            <span class="count-unit">枚</span>
+          </div>
+          <div class="action-buttons">
+            <button class="btn-action btn-deposit" id="deposit-1000" aria-label="1000円を入金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>
+              入金
+            </button>
+            <button class="btn-action btn-withdraw" id="withdraw-1000" aria-label="1000円を出金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+              出金
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 500円 -->
+      <div class="denomination-card denom-500" data-denom="500">
+        <div class="denom-label">
+          <div class="denom-icon">500</div>
+          <span class="denom-name">500円</span>
+        </div>
+        <div class="denom-controls">
+          <div class="count-input-wrapper">
+            <input type="number" class="count-input" id="input-500" value="1" min="1" inputmode="numeric" aria-label="500円の枚数">
+            <span class="count-unit">枚</span>
+          </div>
+          <div class="action-buttons">
+            <button class="btn-action btn-deposit" id="deposit-500" aria-label="500円を入金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>
+              入金
+            </button>
+            <button class="btn-action btn-withdraw" id="withdraw-500" aria-label="500円を出金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+              出金
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 100円 -->
+      <div class="denomination-card denom-100" data-denom="100">
+        <div class="denom-label">
+          <div class="denom-icon">100</div>
+          <span class="denom-name">100円</span>
+        </div>
+        <div class="denom-controls">
+          <div class="count-input-wrapper">
+            <input type="number" class="count-input" id="input-100" value="1" min="1" inputmode="numeric" aria-label="100円の枚数">
+            <span class="count-unit">枚</span>
+          </div>
+          <div class="action-buttons">
+            <button class="btn-action btn-deposit" id="deposit-100" aria-label="100円を入金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>
+              入金
+            </button>
+            <button class="btn-action btn-withdraw" id="withdraw-100" aria-label="100円を出金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+              出金
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 50円 -->
+      <div class="denomination-card denom-50" data-denom="50">
+        <div class="denom-label">
+          <div class="denom-icon">50</div>
+          <span class="denom-name">50円</span>
+        </div>
+        <div class="denom-controls">
+          <div class="count-input-wrapper">
+            <input type="number" class="count-input" id="input-50" value="1" min="1" inputmode="numeric" aria-label="50円の枚数">
+            <span class="count-unit">枚</span>
+          </div>
+          <div class="action-buttons">
+            <button class="btn-action btn-deposit" id="deposit-50" aria-label="50円を入金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>
+              入金
+            </button>
+            <button class="btn-action btn-withdraw" id="withdraw-50" aria-label="50円を出金" type="button">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
+              出金
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- リセットボタン -->
+    <div class="reset-section">
+      <button class="btn-reset" id="btn-reset" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+        リセット
+      </button>
+    </div>
+
+    <!-- フッター -->
+    <footer class="app-footer">
+      <p class="footer-text">店金庫管理アプリ v1.0</p>
+    </footer>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
