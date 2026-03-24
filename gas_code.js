@@ -40,55 +40,33 @@ function ensureHeaders(sheet) {
 }
 
 /**
- * GET: 最新の在庫状況を返す
- */
-function doGet(e) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_NAME);
-    
-    if (!sheet) {
-      return jsonResponse({ success: false, error: 'シートが見つかりません' });
-    }
-    
-    ensureHeaders(sheet);
-    var lastRow = sheet.getLastRow();
-    
-    if (lastRow <= 1) {
-      return jsonResponse({
-        success: true,
-        vault: { '50': 0, '100': 0, '500': 0, '1000': 0, '5000': 0 },
-        totalBalance: 0,
-        lastUpdated: null
-      });
-    }
-    
-    var lastRowData = sheet.getRange(lastRow, 1, 1, 11).getValues()[0];
-    
-    return jsonResponse({
-      success: true,
-      vault: {
-        '50': lastRowData[5] || 0,
-        '100': lastRowData[6] || 0,
-        '500': lastRowData[7] || 0,
-        '1000': lastRowData[8] || 0,
-        '5000': lastRowData[9] || 0
-      },
-      totalBalance: lastRowData[10] || 0,
-      lastUpdated: lastRowData[0] ? lastRowData[0].toString() : null
-    });
-    
-  } catch (error) {
-    return jsonResponse({ success: false, error: error.toString() });
-  }
-}
-
-/**
  * POST: 入出金データを記録
+ * no-cors モードのリクエストに対応
+ * （Content-Type が text/plain の場合でも正しくパース）
  */
 function doPost(e) {
   try {
-    var rawData = e.postData ? e.postData.contents : '';
+    // no-cors fetch では postData の形式が異なる場合がある
+    var rawData = '';
+    
+    // postData.contents から取得（通常のPOST）
+    if (e.postData && e.postData.contents) {
+      rawData = e.postData.contents;
+    }
+    // parameter.data から取得（form送信）
+    else if (e.parameter && e.parameter.data) {
+      rawData = e.parameter.data;
+    }
+    
+    // デバッグログ
+    Logger.log('受信データ: ' + rawData);
+    Logger.log('postData type: ' + (e.postData ? e.postData.type : 'none'));
+    
+    if (!rawData) {
+      Logger.log('データが空です');
+      return jsonResponse({ success: false, error: 'データが空です' });
+    }
+    
     var data = JSON.parse(rawData);
     
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -106,7 +84,8 @@ function doPost(e) {
     var vault = data.vault;
     var totalBalance = data.totalBalance;
     
-    if (!type || !denom || !count || !vault) {
+    if (!type || !denom || !count) {
+      Logger.log('パラメータ不足: type=' + type + ' denom=' + denom + ' count=' + count);
       return jsonResponse({ success: false, error: 'パラメータ不足' });
     }
     
@@ -117,13 +96,18 @@ function doPost(e) {
     var newRow = [
       now, type, denom + '円', count,
       (type === '入金' ? '+' : '-') + amount,
-      vault['50'] || 0, vault['100'] || 0, vault['500'] || 0,
-      vault['1000'] || 0, vault['5000'] || 0,
-      totalBalance
+      vault ? (vault['50'] || 0) : 0,
+      vault ? (vault['100'] || 0) : 0,
+      vault ? (vault['500'] || 0) : 0,
+      vault ? (vault['1000'] || 0) : 0,
+      vault ? (vault['5000'] || 0) : 0,
+      totalBalance || 0
     ];
     
     sheet.appendRow(newRow);
+    Logger.log('記録完了: ' + newRow.join(', '));
     
+    // 書式設定
     var lastRow = sheet.getLastRow();
     var typeCell = sheet.getRange(lastRow, 2);
     var amountCell = sheet.getRange(lastRow, 5);
@@ -142,8 +126,21 @@ function doPost(e) {
     });
     
   } catch (error) {
+    Logger.log('エラー発生: ' + error.toString());
+    Logger.log('スタックトレース: ' + error.stack);
     return jsonResponse({ success: false, error: error.toString() });
   }
+}
+
+/**
+ * GET: テスト用（ブラウザで直接アクセスして動作確認）
+ */
+function doGet(e) {
+  return jsonResponse({
+    success: true,
+    message: '店金庫管理 GAS API は正常に動作しています',
+    timestamp: Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss')
+  });
 }
 
 /**
@@ -153,4 +150,26 @@ function jsonResponse(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * テスト用関数（Apps Scriptエディタから実行して動作確認）
+ */
+function testDoPost() {
+  var mockEvent = {
+    postData: {
+      contents: JSON.stringify({
+        type: '入金',
+        denom: '1000',
+        count: 1,
+        vault: { '50': 0, '100': 0, '500': 0, '1000': 1, '5000': 0 },
+        totalBalance: 1000
+      }),
+      type: 'text/plain'
+    },
+    parameter: {}
+  };
+  
+  var result = doPost(mockEvent);
+  Logger.log(result.getContent());
 }
