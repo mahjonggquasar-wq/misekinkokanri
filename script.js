@@ -184,8 +184,27 @@
     return isNaN(val) || val < 1 ? 1 : val;
   }
 
-  function handleDeposit(denomId) {
+  // --- 処理実行前の自動同期 ---
+  async function syncBeforeAction() {
+    if (!getGasUrl()) return;
+    showLoading();
+    try {
+      const data = await fetchVaultFromSheet();
+      if (data && data.success && data.vault) {
+        DENOMINATIONS.forEach(d => { vault[d.id] = data.vault[d.id] || 0; });
+        saveVaultLocal();
+      }
+    } catch (err) {
+      console.warn('処理前の自動同期に失敗:', err);
+    } finally {
+      hideLoading();
+    }
+  }
+
+  async function handleDeposit(denomId) {
+    await syncBeforeAction(); // 最新状態を取得
     const count = getInputCount(denomId);
+    
     vault[denomId] += count;
     saveVaultLocal();
     updateAllUI();
@@ -194,8 +213,10 @@
     sendToSheet('入金', denomId, count);
   }
 
-  function handleWithdraw(denomId) {
+  async function handleWithdraw(denomId) {
+    await syncBeforeAction(); // 最新状態を取得
     const count = getInputCount(denomId);
+    
     if (vault[denomId] < count) {
       const card = document.querySelector(`.denomination-card[data-denom="${denomId}"]`);
       card.classList.remove('shake');
@@ -347,7 +368,7 @@
     updateAllUI();
 
     if (loaded) {
-      showToast('在庫データを復元しました', 'info');
+      // 初期化完了時、トーストを一度出す
     }
 
     const savedUrl = getGasUrl();
@@ -355,6 +376,10 @@
       gasUrlInput.value = savedUrl;
       hideSetupPanel();
       setSyncStatus('connected');
+      
+      // アプリを起動（リロード）した時にも自動的に同期を行う
+      handleSync();
+      showToast('最新データを取得しています...', 'info');
     } else {
       showSetupPanel();
       setSyncStatus('disconnected');
